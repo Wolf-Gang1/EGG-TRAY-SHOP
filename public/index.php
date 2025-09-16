@@ -5,7 +5,6 @@ $products = $pdo->query('SELECT * FROM products')->fetchAll();
 ?>
 <!doctype html>
 <html>
-3
 <head>
  <meta charset="utf-8">
  <title>Egg Tray Shop</title>
