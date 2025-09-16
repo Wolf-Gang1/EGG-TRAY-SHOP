@@ -2,68 +2,68 @@
 session_start();
 require_once __DIR__ . '/../src/db.php';
 require_once __DIR__ . '/../src/functions.php';
-if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-$action = $_POST['action'] ?? '';
-$pid = (int)($_POST['product_id'] ?? 0);
-$qty = (int)($_POST['qty'] ?? 1);
-if ($action === 'add' && $pid > 0) {
-if (isset($_SESSION['cart'][$pid])) {
-
-$_SESSION['cart'][$pid] += $qty;
-} else {
-$_SESSION['cart'][$pid] = $qty;
+if (empty($_SESSION['cart'])) {
+header('Location: index.php'); exit;
 }
-header('Location: cart.php'); exit;
-}
-}
-$cartItems = [];
-$total = 0;
-if (!empty($_SESSION['cart'])) {
+// Build cart items again
 $ids = implode(',', array_map('intval', array_keys($_SESSION['cart'])));
 $stmt = $pdo->query("SELECT * FROM products WHERE id IN ($ids)");
 $rows = $stmt->fetchAll();
+$total = 0;
 foreach ($rows as $r) {
 $qty = $_SESSION['cart'][$r['id']];
-$line = $r;
-$line['qty'] = $qty;
-$line['line_total'] = $qty * $r['price'];
-$total += $line['line_total'];
-$cartItems[] = $line;
+$total += $qty * $r['price'];
 }
+// Create order
+$orderRef = 'ORD' . time() . rand(100,999);
+$pdo->beginTransaction();
+try {
+$ins = $pdo->prepare('INSERT INTO orders (order_ref, total, status) VALUES
+(?, ?, ?)');
+$ins->execute([$orderRef, $total, 'pending']);
+$orderId = $pdo->lastInsertId();
+$insItem = $pdo->prepare('INSERT INTO order_items (order_id, product_id,
+qty, price) VALUES (?, ?, ?, ?)');
+foreach ($rows as $r) {
+$qty = $_SESSION['cart'][$r['id']];
+$insItem->execute([$orderId, $r['id'], $qty, $r['price']]);
 }
+$pdo->commit();
+// append to CSV log for reports (status pending)
+append_transaction_csv($orderRef, $total, 'pending', date('Y-m-d H:i:s'));
+// clear cart
+unset($_SESSION['cart']);
+} catch (Exception $e) {
+$pdo->rollBack();
+die('Order failed: ' . $e->getMessage());
+}
+// Path to your QR image - put the QR image into public/assets/img/
+payment_qr.png
+$qrImage = 'assets/img/payment_qr.png';
 ?>
 <!doctype html>
 <html>
 <head>
  <meta charset="utf-8">
- <title>Cart — Egg Tray Shop</title>
+ <title>Checkout — Egg Tray Shop</title>
  <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
  <main>
- <h1>Your Cart</h1>
-<?php if (empty($cartItems)): ?>
- <p>Cart is empty — <a href="index.php">shop now</a></p>
-<?php else: ?>
- <table>
- <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Line</th></
-tr></thead>
- <tbody>
-<?php foreach ($cartItems as $c): ?>
- <tr>
- <td><?= htmlspecialchars($c['name']) ?></td>
- <td><?= $c['qty'] ?></td>
- <td>₱<?= format_money($c['price']) ?></td>
- <td>₱<?= format_money($c['line_total']) ?></td>
-
- </tr>
-<?php endforeach; ?>
- </tbody>
- </table>
- <p><strong>Total: ₱<?= format_money($total) ?></strong></p>
- <a href="checkout.php">Proceed to checkout</a>
-<?php endif; ?>
+ <h1>Checkout</h1>
+ <p>Order reference: <strong><?= htmlspecialchars($orderRef) ?></strong></p>
+ <p>Total amount: <strong>₱<?= format_money($total) ?></strong></p>
+ <section>
+ <h2>Pay using QR</h2>
+ <p>Scan this QR with your banking app to pay. After paying, click the
+button "I have paid" so we can confirm the payment.</p>
+ <img src="<?= $qrImage ?>" alt="Payment QR" style="max-width:260px;">
+ <form action="../admin/confirm_payment.php" method="post">
+ <input type="hidden" name="order_ref" value="<?=
+htmlspecialchars($orderRef) ?>">
+ <button type="submit">I have paid — notify seller</button>
+ </form>
+ </section>
  </main>
 </body>
 </html>
