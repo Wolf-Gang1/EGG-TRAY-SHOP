@@ -2,7 +2,6 @@ CREATE DATABASE egg_tray_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE egg_tray_shop;
 CREATE TABLE products (
 id INT AUTO_INCREMENT PRIMARY KEY,
-1
 name VARCHAR(255) NOT NULL,
 description TEXT,
 price DECIMAL(10,2) NOT NULL,
