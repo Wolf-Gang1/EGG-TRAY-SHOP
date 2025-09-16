@@ -1,0 +1,1 @@
+CREATE DATABASE egg_tray_shop; -- (See full schema in conversation)
